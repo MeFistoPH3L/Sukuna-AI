@@ -15,12 +15,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Agent:
 	def __init__(self):
 		self.state_size = 24+3;
-		self.memory = ReplayMemory(2000)
+		self.memory = ReplayMemory(480)
 		self.T = 96
 		self.action_size = 3
-		self.batch_size = 16
+		self.batch_size = 96
 		self.gamma = 0.99
-		self.epsilon = 0.1
+		self.epsilon = 1
 		self.q_network=DQN(self.state_size).to(device)
 		self.target_net= DQN(self.state_size).to(device)
 		self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=0.00025)
@@ -30,17 +30,17 @@ class Agent:
 				weight_init.normal_(param_p)
 
 	def store(self, state, action, new_state, reward):
-		self.memory.push(state, action, new_state, reward)
+		self.memory.push(state, action, new_state, np.log(reward))
 
 	def make_action(self, state):
-		if np.random.rand() <= self.epsilon:
+		if np.random.randint(100) <= self.epsilon:
 			return random.randrange(self.action_size)
 		tensor = torch.FloatTensor(state).to(device)
 		tensor = tensor.unsqueeze(0)
 		options = self.target_net(tensor)
 		return (np.argmax(options[-1].detach().cpu().numpy()))
 	def optimize(self, step):
-		if self.memory.__len__() < self.batch_size*10:
+		if self.memory.__len__() < self.batch_size*3:
 			return
 		transitions = self.memory.sample(self.batch_size)
 		# Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
@@ -81,7 +81,7 @@ class Agent:
 		# Optimize the model
 		
 		loss.backward()
-		
+		par = list(self.q_network.parameters())
 		for param in self.q_network.parameters():
 				param.grad.data.clamp_(-1, 1)
 		

@@ -11,6 +11,7 @@ class TradingEnv:
         self.agent = agent
         self.balance = 100000
         self.actions = [[0,0,0]]*96
+        self.last_action = 0
 
     def reset(self):
         self.balance_history = [float(self.initial_value)]
@@ -18,8 +19,6 @@ class TradingEnv:
 
     def step(self, state, next_state, open_, close, step, end):
         v_old = self.balance_history[-1]
-        print(step)
-
         if end == True:
             return
         tmp_states = np.empty(shape = [0,27])
@@ -33,68 +32,48 @@ class TradingEnv:
 
         temp = self.position[:]
         price_move = close/open_ - 1
-        if temp[2] == 0: 
-            temp[0] += 1
-            reward = -1*price_move*temp[0]*self.trade_size + price_move * temp[2]*self.trade_size - self.trade_size*0.0002
-            tmp_states_new[-1][-1]=temp[-1]
-            tmp_states_new[-1][-2]=temp[-2]
-            tmp_states_new[-1][-3]=temp[-3]
-            self.agent.store(tmp_states, 0, tmp_states_new, v_old/(reward+v_old) - 1)
-        else:
-            temp = [ 0, 0, 0 ]
-            reward = -1 * self.trade_size * 0.0002 * self.position[2]
-            tmp_states_new[-1][-1]=temp[-1]
-            tmp_states_new[-1][-2]=temp[-2]
-            tmp_states_new[-1][-3]=temp[-3]
-            self.agent.store(tmp_states, 0, tmp_states_new, v_old/(reward+v_old) - 1)
 
-        temp = self.position[:]
-        reward = -1*price_move*temp[0] + price_move * temp[2]
-        tmp_states_new[-1][-1]=temp[-1]
-        tmp_states_new[-1][-2]=temp[-2]
-        tmp_states_new[-1][-3]=temp[-3]
-        self.agent.store(tmp_states, 1, tmp_states_new, v_old/(reward+v_old) - 1)
+        v_new = v_old + self.trade_size*price_move - self.trade_size * 0.0002 * abs(1-self.last_action)
+        tmp_states_new[-1][-3]=0
+        tmp_states_new[-1][-2]=0
+        tmp_states_new[-1][-1]=1
+        self.agent.store(tmp_states, 2, tmp_states_new, v_new/v_old)
 
-        temp = self.position[:]
-        if temp[0] == 0: 
-            temp[2] += 1
-            reward = -1*price_move*temp[0]*self.trade_size + price_move * temp[2]*self.trade_size - self.trade_size*0.0002
-            tmp_states_new[-1][-1]=temp[-1]
-            tmp_states_new[-1][-2]=temp[-2]
-            tmp_states_new[-1][-3]=temp[-3]
-            self.agent.store(tmp_states, 2, tmp_states_new, v_old/(reward+v_old) - 1)
-        else:
-            temp = [ 0, 0, 0 ]
-            reward = -1 * self.trade_size * 0.0002 * self.position[0]
-            tmp_states_new[-1][-1]=temp[-1]
-            tmp_states_new[-1][-2]=temp[-2]
-            tmp_states_new[-1][-3]=temp[-3]
-            self.agent.store(tmp_states, 2, tmp_states_new, v_old/(reward+v_old) - 1)
+        v_new = v_old + -1*self.trade_size*price_move - self.trade_size * 0.0002 * abs(-1-self.last_action)
+        tmp_states_new[-1][-3]=1
+        tmp_states_new[-1][-2]=0
+        tmp_states_new[-1][-1]=0
+        self.agent.store(tmp_states, 0, tmp_states_new, v_new/v_old)
 
+        v_new = v_old - self.trade_size * 0.0002 * abs(self.last_action)
+        tmp_states_new[-1][-1]=0
+        tmp_states_new[-1][-2]=0
+        tmp_states_new[-1][-3]=0
+        self.agent.store(tmp_states, 1, tmp_states_new, v_new/v_old)
 
-
-
-        action = self.agent.make_action(tmp_states)
-        commision = 0
-        if action == 0 and self.position[2] != 0:
-            commision = self.position[2]*self.trade_size*0.0002
-            self.position[2] = 0
-        elif action == 2 and self.position[0] != 0:
-            commision = self.position[0]*self.trade_size*0.0002
-            self.position[0]=0
-        elif action == 1:
-            None
-        else:
-            self.position[action]+=1
-            commision = abs(action-1)*self.trade_size*0.02/100
-        v_new = v_old + -1*price_move*self.position[0]*self.trade_size + price_move * self.position[2]*self.trade_size - commision
+        action = self.agent.make_action(tmp_states) - 1
+        commision = self.trade_size * 0.0002 * abs(action - self.last_action)
+        
+        v_new = v_old + action*self.trade_size*price_move-commision
+        self.position = [0,0,0]
+        if action + 1 != 1:
+            self.position[action + 1] = 1
         self.balance_history = np.append(self.balance_history,[v_new])
+        if step <= 10000:
+            print(f"\n{step}   {v_old}   {action}   {self.position}\n")
         if step > 10000:
-            path ='D:/Sukuna AI/Results/ethusdt_log.csv'
-            f = open(path, 'a')
-            f.write(str(self.balance)+',' + str(action-1)+','+str(self.position[0]) + ',' + str(self.position[2])+'\n')
-            f.close()
-            self.balance += -1*price_move*self.position[0]*self.trade_size + price_move * self.position[2]*self.trade_size - commision
+            while True:
+                try:
+                    print(int(self.balance))
+                    path ='D:/Sukuna AI/Results/ethusdt_log.csv'
+                    f = open(path, 'a')
+                    f.write(str(self.balance)+',' + str(action)+','+str(self.position[0]) + ',' + str(self.position[2])+'\n')
+                    f.close()
+                    self.balance += action*self.trade_size*price_move-commision
+                except:
+                    continue
+                break
         self.actions.pop(0)
         self.actions.append(self.position)
+        self.last_action = action
         self.agent.optimize(step)

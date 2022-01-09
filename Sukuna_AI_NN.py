@@ -1,4 +1,4 @@
-
+import torch
 import os
 import numpy as np
 import pandas as pd
@@ -120,6 +120,11 @@ f.close()
 """
 i = 0
 states = load_data('ethusdt_states.txt')
+SEED = 2037
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
 for i in np.arange(96, len(states)-1):
     o = market_data[i+95][4]
     c = market_data[i+96][4]
