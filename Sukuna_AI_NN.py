@@ -18,6 +18,7 @@ import env
 import scipy.stats as stats
 from numpy import savetxt
 import json, codecs
+from copy import deepcopy
 
 path = r"D:\Sukuna AI\Candles"
 binance_api_url = "https://fapi.binance.com/fapi/v1/"
@@ -53,6 +54,8 @@ def read_history(tf, currency):
                 time_ = 15
             if tf == "1h":
                 time_ = 60
+            if tf == "30m":
+                time_ = 30
             if tf == "1d":
                 time_ = 24*60
             start_time += time_*60
@@ -75,8 +78,6 @@ def read_history(tf, currency):
         break
     return market_data[:-1]
 
-market_data = read_history('5m', 'ETHUSDT')
-environment = env.TradingEnv(Agent.Agent())
 
 def save_data(data, name):
     json.dump(data.tolist(), codecs.open('D:/Sukuna AI/Data/' + name, 'a', encoding='utf-8'), sort_keys=True, indent=4)
@@ -91,11 +92,34 @@ def z_trans(x):
     #temp_arr = np.reshape(temp_arr,(-1,1))
     temp_arr = np.append(temp_arr[0][-12:], temp_arr[1][-12:], axis = 0)
     return temp_arr
-states = np.empty(shape = [0,96, 24])
-new_states = np.empty(shape = [0,96,24])
-end_ = np.empty(shape = (0,), dtype=bool)
-open_ = np.empty(shape = (0,))
-close_ = np.empty(shape = (0,))
+
+
+def hot_encoding(a):
+    a_ = np.zeros(3, dtype=np.float32)
+    a_[a + 1] = 1.
+    return a_
+
+def merge_state_action(state, a_variable):
+    T = len(state)
+    actions_for_state = []
+    actions_for_state.append(a_variable)
+
+    diff = T - len(actions_for_state)
+    if diff > 0:
+        actions_for_state.extend([a_variable] * diff)
+
+    result = []
+    for s, a in zip(state, actions_for_state):
+        new_s = deepcopy(s)
+        new_s.extend(hot_encoding(a))
+        result.append(new_s)
+
+    result = np.asarray(result)
+    return result
+
+market_data = load_data('close_ethusdt_5m_with_v.txt')
+environment = env.TradingEnv()
+agent = Agent.Agent()
 """
 f = open ('D:/Sukuna AI/Data/' + 'ethusdt_states.txt', 'a')
 f.write('[')
@@ -119,14 +143,21 @@ f.write(']')
 f.close()
 """
 i = 0
-states = load_data('ethusdt_states.txt')
+states = load_data('z_score_log_ethusdt_5m_with_v.txt')
 SEED = 2037
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
-for i in np.arange(96, len(states)-1):
-    o = market_data[i+95][4]
-    c = market_data[i+96][4]
-    current_state = states_arr = np.empty(shape = [0,24])
-    environment.step(states[i-96:i],states[i-95:i+1],o,c,i-95,False)
+state = merge_state_action(states[0:96],0)
+for i in np.arange(97, len(states)-1):
+    action = agent.make_action(state, i-96)
+    o = market_data[i-2]
+    c = market_data[i-1]
+    actions, rewards, new_states, state = environment.step(states[i-96:i],o,c,i-96, action-1)
+    agent.store(state, actions, new_states, rewards, action, i-96)
+    agent.optimize(i-96)
+
+f = open ('D:/Sukuna AI/Results/log.txt', 'a')
+f.write(str(environment.balance_history[-1])+'\n')
+f.close()
