@@ -11,7 +11,7 @@ class TradingEnv:
         self.position = [0]*3
         self.trade_size = 8000
         self.balance = 100000
-        self.actions = [0]
+        self.actions = [0]*400
         self.last_action = 0
     @staticmethod
     def hot_encoding(a):
@@ -38,7 +38,8 @@ class TradingEnv:
 
     def reset(self):
         self.balance_history = [float(self.initial_value)]
-        self.position = 0
+        self.position = [0]*3
+        self.actions = [0]*256
 
     def step(self, state, open_, close, step, action):
         actions = [-1,0,1]
@@ -54,7 +55,7 @@ class TradingEnv:
         v_new = np.asarray(v_new)
         rewards = []
         for i in range(len(v_new)):
-            if v_new[i] * v_old > 0 and v_old != 0:
+            if v_new[i] * v_old > 0 and v_old > 0:
                 rewards.append(np.log(v_new[i] / v_old))
             else:
                 rewards.append(-1)
@@ -75,7 +76,8 @@ class TradingEnv:
                 act = 'Open Short'
             elif self.actions[-1]==1:
                 act = 'Close Long and Open Short'
-        self.actions.pop(0)
+        if len(self.actions) > 1000:
+            self.actions.pop(0)
         self.actions.append(int(action))
         self.balance_history.append(float(v_new[action+1]))
         while True:

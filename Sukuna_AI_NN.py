@@ -117,9 +117,7 @@ def merge_state_action(state, a_variable):
     result = np.asarray(result)
     return result
 
-market_data = load_data('close_ethusdt_5m_with_v.txt')
-environment = env.TradingEnv()
-agent = Agent.Agent()
+market_data = load_data('close_ethusdt_5m_8.txt')
 """
 f = open ('D:/Sukuna AI/Data/' + 'ethusdt_states.txt', 'a')
 f.write('[')
@@ -142,22 +140,26 @@ f = open ('D:/Sukuna AI/Data/' + 'ethusdt_states.txt', 'a')
 f.write(']')
 f.close()
 """
-i = 0
-states = load_data('z_score_log_ethusdt_5m_with_v.txt')
+i = 0   
+states = load_data('z_score_log_ethusdt_5m_8.txt')
 SEED = 2037
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
-state = merge_state_action(states[0:96],0)
-for i in np.arange(97, len(states)-1):
-    action = agent.make_action(state, i-96)
-    o = market_data[i-2]
-    c = market_data[i-1]
-    actions, rewards, new_states, state = environment.step(states[i-96:i],o,c,i-96, action-1)
-    agent.store(state, actions, new_states, rewards, action, i-96)
-    agent.optimize(i-96)
+for ep in range (1000):
+    state = merge_state_action(states[0:288],0)
+    environment = env.TradingEnv()
+    agent = Agent.Agent(True)
+    for i in np.arange(289, len(states)-1):
+        action = agent.make_action(state, i-288)
+        o = market_data[i-2]
+        c = market_data[i-1]
+        old_state = state
+        actions, rewards, new_states, state = environment.step(states[i-288:i],o,c,i-288, action-1)
+        agent.store(old_state, actions, new_states, rewards, action, i-288)
+        agent.optimize(i-288)
 
-f = open ('D:/Sukuna AI/Results/log.txt', 'a')
-f.write(str(environment.balance_history[-1])+'\n')
-f.close()
+    f = open ('D:/Sukuna AI/Results/log.txt', 'a')
+    f.write(str(environment.balance_history[-1])+'\n')
+    f.close()

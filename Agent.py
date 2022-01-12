@@ -1,6 +1,6 @@
 from memory import ReplayMemory, Transition
 from nn_model import DQN
-
+from torchinfo import summary
 import numpy as np
 import random
 import torch
@@ -13,9 +13,10 @@ import copy
 import os
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Agent:
-	def __init__(self):
+	def __init__(self, rand):
 		self.state_size = 16+3;
-		self.memory = ReplayMemory(10000)
+		self.rand_act = rand
+		self.memory = ReplayMemory(480)
 		self.T = 96
 		self.action_size = 3
 		self.batch_size = 96
@@ -32,71 +33,81 @@ class Agent:
 			self.target_net.load_state_dict(self.q_network.state_dict())
 		
 		self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=0.00025)
+
+		#summary(self.q_network,input_size = (1, 96, 99))
+		#summary(self.q_network,input_size = (1, 96, 99))
 	def store(self, state, actions, new_states, rewards, action, step):
 		for n in range(len(actions)):
 			self.memory.push(state, actions[n]+1, new_states[n], rewards[n])
 
 	def make_action(self, state, step):
-		if  step < 10000 and np.random.rand() <= self.epsilon:
+		if self.rand_act == True and np.random.rand() <= self.epsilon:
 			return random.randrange(self.action_size)
 		tensor = torch.FloatTensor(state).to(device)
 		tensor = tensor.unsqueeze(0)
-		options = self.target_net(tensor)
+		options = self.q_network(tensor)
 		return (np.argmax(options[-1].detach().cpu().numpy()))
 	def optimize(self, step):
-		if self.memory.__len__() < self.batch_size*10:
+		if self.memory.__len__() < 480:
 			return
 		torch.save(self.q_network, r'D:\Sukuna AI\Model\q_nn_5m.pth')
 		torch.save(self.target_net, r'D:\Sukuna AI\Model\target_nn_5m.pth')
-		transitions = self.memory.sample(self.batch_size)
-		# Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-		# detailed explanation). This converts batch-array of Transitions
-		# to Transition of batch-arrays.
-		batch = Transition(*zip(*transitions))
+		if step % self.T == 0:
+			transitions = self.memory.sample(self.batch_size)
+			# Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+			# detailed explanation). This converts batch-array of Transitions
+			# to Transition of batch-arrays.
+			batch = Transition(*zip(*transitions))
 
-		# Compute a mask of non-final states and concatenate the batch elements
-		# (a final state would've been the one after which simulation ended)
-		next_state = torch.FloatTensor(batch.next_state).to(device)
-		non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, next_state)))
-		non_final_next_states = torch.cat([s for s in next_state if s is not None])
+			# Compute a mask of non-final states and concatenate the batch elements
+			# (a final state would've been the one after which simulation ended)
+			next_state = torch.FloatTensor(batch.next_state).to(device)
+			non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, next_state)))
+			non_final_next_states = torch.cat([s for s in next_state if s is not None])
 
-		state_batch = torch.FloatTensor(batch.state).to(device)
-		action_batch = torch.LongTensor(batch.action).to(device)
-		reward_batch = torch.FloatTensor(batch.reward).to(device)
+			state_batch = torch.FloatTensor(batch.state).to(device)
+			action_batch = torch.LongTensor(batch.action).to(device)
+			reward_batch = torch.FloatTensor(batch.reward).to(device)
+			action = []
+			for x in batch.next_state:
+				tensor = torch.FloatTensor(x).to(device)
+				tensor = tensor.unsqueeze(0)
+				options = self.q_network(tensor)
+				action.append((np.argmax(options[-1].detach().cpu().numpy())))
+			next_state_action = torch.LongTensor(action).to(device)
+			# Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+			# columns of actions taken. These are the actions which would've been taken
+			# for each batch state according to q_network
+			l = self.q_network(state_batch).size(0)
+			state_action_values = self.q_network(state_batch).gather(1, action_batch.reshape((self.batch_size, 1)))
+			state_action_values = state_action_values.squeeze(-1)
 
-		# Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-		# columns of actions taken. These are the actions which would've been taken
-		# for each batch state according to q_network
-		l = self.q_network(state_batch).size(0)
-		state_action_values = self.q_network(state_batch)[95:l:96].gather(1, action_batch.reshape((self.batch_size, 1)))
-		state_action_values = state_action_values.squeeze(-1)
+			# Compute V(s_{t+1}) for all next states.
+			# Expected values of actions for non_final_next_states are computed based
+			# on the "older" target_net; selecting their best reward with max(1)[0].
+			# This is merged based on the mask, such that we'll have either the expected
+			# state value or 0 in case the state was final.
+			
+			next_state_values = torch.zeros(self.batch_size, device=device)
+			next_state_values = self.target_net(next_state).gather(1, next_state_action.reshape((self.batch_size, 1)))
+			next_state_values = next_state_values.squeeze(-1)
+			# Compute the expected Q values
+			expected_state_action_values = (next_state_values * self.gamma) + reward_batch
+			# Compute the loss
+			loss = torch.nn.MSELoss()(expected_state_action_values, state_action_values)
 
-		# Compute V(s_{t+1}) for all next states.
-		# Expected values of actions for non_final_next_states are computed based
-		# on the "older" target_net; selecting their best reward with max(1)[0].
-		# This is merged based on the mask, such that we'll have either the expected
-		# state value or 0 in case the state was final.
-		next_state_values = torch.zeros(self.batch_size, device=device)
-		next_state_values[non_final_mask] = self.target_net(next_state)[95:l:96].max(1)[0].detach()
-		# Compute the expected Q values
-		expected_state_action_values = (next_state_values * self.gamma) + reward_batch
-
-		# Compute the loss
-		loss = torch.nn.MSELoss()(expected_state_action_values, state_action_values)
-
-		# Optimize the model
+			# Optimize the model
+			self.optimizer.zero_grad()
+			loss.backward()
+			par = list(self.q_network.parameters())
+			for param in self.q_network.parameters():
+					param.grad.data.clamp_(-1, 1)
 		
-		loss.backward()
-		par = list(self.q_network.parameters())
-		for param in self.q_network.parameters():
-				param.grad.data.clamp_(-1, 1)
-		
-		self.optimizer.step()
+			self.optimizer.step()
 		
 		# print('soft_update')
-		if step % self.T == 0:
-			gamma = 0.001
-			target_update = copy.deepcopy(self.target_net.state_dict())
-			for k in target_update.keys():
-				target_update[k] = self.target_net.state_dict()[k] * (1 - gamma) + self.q_network.state_dict()[k] * gamma
-			self.target_net.load_state_dict(target_update)
+		gamma = 0.001
+		target_update = copy.deepcopy(self.target_net.state_dict())
+		for k in target_update.keys():
+			target_update[k] = self.target_net.state_dict()[k] * (1 - gamma) + self.q_network.state_dict()[k] * gamma
+		self.target_net.load_state_dict(target_update)

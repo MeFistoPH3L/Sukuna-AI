@@ -12,7 +12,17 @@ class DQN(nn.Module):
 		)
 		self.lstm = nn.LSTM(256, 256, 1, batch_first=True)
 		self.last_linear = nn.Linear(256, 3)
-		
+		nn.init.constant_(self.first_two_layers[0].bias,0)
+		nn.init.constant_(self.first_two_layers[2].bias,0)
+		nn.init.constant_(self.last_linear.bias,0)
+		self.lstm.bias_hh_l0.data.fill_(0)
+		self.lstm.bias_ih_l0.data.fill_(0)
+		for names in self.lstm._all_weights:
+			for name in filter(lambda n: "bias" in n,  names):
+				bias = getattr(self.lstm, name)
+				n = bias.size(0)
+				start, end = n//4, n//2
+				bias.data[start:end].fill_(1.)
 
 # Data Flow Protocol:
 # 1. network input shape: (batch_size, seq_length, num_features)
@@ -22,6 +32,7 @@ class DQN(nn.Module):
 
 	def forward(self, input):
 		# rint(input.size())
+
 		x = self.first_two_layers(input)
 		# print(x.size())
 		
