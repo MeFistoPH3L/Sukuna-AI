@@ -31,7 +31,8 @@ class Agent:
 			for param_p in self.q_network.parameters(): 
 				weight_init.normal_(param_p)
 			self.target_net.load_state_dict(self.q_network.state_dict())
-		
+		self.hs = torch.zeros(1, 1, 256)
+		self.cs = torch.zeros(1, 1, 256)
 		self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=0.00025)
 
 		#summary(self.q_network,input_size = (1, 96, 99))
@@ -41,12 +42,14 @@ class Agent:
 			self.memory.push(state, actions[n]+1, new_states[n], rewards[n])
 
 	def make_action(self, state, step):
-		if self.rand_act == True and np.random.rand() <= self.epsilon:
-			return random.randrange(self.action_size)
+		#if self.rand_act == True and np.random.rand() <= self.epsilon:
+		#	return random.randrange(self.action_size)
 		tensor = torch.FloatTensor(state).to(device)
 		tensor = tensor.unsqueeze(0)
-		options = self.q_network(tensor)
-		return (np.argmax(options[-1].detach().cpu().numpy()))
+		options = self.q_network(tensor, self.hs, self.cs)
+		self.hs = options[1]
+		self.cs = options[2]
+		return (np.argmax(options[0].detach().cpu().numpy()))
 	def optimize(self, step):
 		if self.memory.__len__() < 480:
 			return
@@ -69,17 +72,23 @@ class Agent:
 			action_batch = torch.LongTensor(batch.action).to(device)
 			reward_batch = torch.FloatTensor(batch.reward).to(device)
 			action = []
+			hs = torch.zeros(1, 1, 256)
+			cs = torch.zeros(1, 1, 256)
 			for x in batch.next_state:
 				tensor = torch.FloatTensor(x).to(device)
 				tensor = tensor.unsqueeze(0)
-				options = self.q_network(tensor)
-				action.append((np.argmax(options[-1].detach().cpu().numpy())))
+				options = self.q_network(tensor,hs,cs)
+				hs = options[1]
+				cs = options[2]
+				action.append((np.argmax(options[0].detach().cpu().numpy())))
 			next_state_action = torch.LongTensor(action).to(device)
+			hs = torch.zeros(1, 96, 256)
+			cs = torch.zeros(1, 96, 256)
 			# Compute Q(s_t, a) - the model computes Q(s_t), then we select the
 			# columns of actions taken. These are the actions which would've been taken
 			# for each batch state according to q_network
-			l = self.q_network(state_batch).size(0)
-			state_action_values = self.q_network(state_batch).gather(1, action_batch.reshape((self.batch_size, 1)))
+			l = self.q_network(state_batch, hs, cs)[0].size(0)
+			state_action_values = self.q_network(state_batch,hs,cs)[0].gather(1, action_batch.reshape((self.batch_size, 1)))
 			state_action_values = state_action_values.squeeze(-1)
 
 			# Compute V(s_{t+1}) for all next states.
@@ -89,7 +98,7 @@ class Agent:
 			# state value or 0 in case the state was final.
 			
 			next_state_values = torch.zeros(self.batch_size, device=device)
-			next_state_values = self.target_net(next_state).gather(1, next_state_action.reshape((self.batch_size, 1)))
+			next_state_values = self.target_net(next_state, hs, cs)[0].gather(1, next_state_action.reshape((self.batch_size, 1)))
 			next_state_values = next_state_values.squeeze(-1)
 			# Compute the expected Q values
 			expected_state_action_values = (next_state_values * self.gamma) + reward_batch

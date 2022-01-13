@@ -30,13 +30,13 @@ class DQN(nn.Module):
 # 3. Linear input shape:  (batch_size * seq_length, hidden_size)
 # 4. Linear output: (batch_size * seq_length, out_size)
 
-	def forward(self, input):
+	def forward(self, input, hs, cs):
 		# rint(input.size())
 
 		x = self.first_two_layers(input)
 		# print(x.size())
 		
-		lstm_out, hs = self.lstm(x)
+		lstm_out, (hs, cs) = self.lstm(x, (hs,cs))
 		# print(lstm_out.size())
 
 		batch_size, seq_len, mid_dim = lstm_out.shape
@@ -44,4 +44,4 @@ class DQN(nn.Module):
 		# linear_in = lstm_out.contiguous().view(-1, lstm_out.size(2))
 
 		# linear_in = lstm_out.reshape(-1, hidden_size) 
-		return self.last_linear(linear_in)
+		return self.last_linear(linear_in), hs, cs

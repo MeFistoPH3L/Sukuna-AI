@@ -54,11 +54,13 @@ class TradingEnv:
             v_new.append(v_old + a * self.trade_size * price_move - commission)
         v_new = np.asarray(v_new)
         rewards = []
+        done = False
         for i in range(len(v_new)):
             if v_new[i] * v_old > 0 and v_old > 0:
                 rewards.append(np.log(v_new[i] / v_old))
             else:
                 rewards.append(-1)
+                done = True
         rewards = np.asarray(rewards) 
         act = ""
         if action == 0:
@@ -89,4 +91,4 @@ class TradingEnv:
                 continue
             break
         print(f"{step} {int(v_new[action+1])} {action}")
-        return actions, rewards, new_states, new_states[action+1]
+        return actions, rewards, new_states, new_states[action+1], done
