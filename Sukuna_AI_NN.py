@@ -147,11 +147,11 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
-for ep in range (1000):
+for ep in range (1000000):
     state = merge_state_action([states[0]],0)
     environment = env.TradingEnv()
     agent = Agent.Agent(True)
-    steps = 0
+    steps = len(states)-1
     for i in np.arange(1, len(states)-1):
         action = agent.make_action(state, i)
         o = market_data[i-1]

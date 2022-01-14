@@ -9,7 +9,7 @@ class TradingEnv:
         self.balance_history = [float(self.initial_value)]
         self.spread = 0.01
         self.position = [0]*3
-        self.trade_size = 8000
+        self.trade_size = 100000
         self.balance = 100000
         self.actions = [0]*400
         self.last_action = 0
@@ -60,7 +60,6 @@ class TradingEnv:
                 rewards.append(np.log(v_new[i] / v_old))
             else:
                 rewards.append(-1)
-                done = True
         rewards = np.asarray(rewards) 
         act = ""
         if action == 0:
@@ -91,4 +90,4 @@ class TradingEnv:
                 continue
             break
         print(f"{step} {int(v_new[action+1])} {action}")
-        return actions, rewards, new_states, new_states[action+1], done
+        return actions, rewards, new_states, new_states[action+1], True if v_new[action + 1] < 0 else False
