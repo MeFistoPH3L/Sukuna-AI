@@ -9,3 +9,5 @@ numpy
 requests
 
 scipy
+
+pytorch
