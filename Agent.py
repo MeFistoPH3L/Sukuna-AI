@@ -10,12 +10,12 @@ import torch.nn.functional as F
 import torch.nn.init as weight_init
 import os.path
 import copy
+from shutil import copyfile
 import os
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Agent:
-	def __init__(self, rand):
-		self.state_size = 16+3;
-		self.rand_act = rand
+	def __init__(self, rate):
+		self.state_size = 16+3
 		self.memory = ReplayMemory(480)
 		self.T = 96
 		self.action_size = 3
@@ -25,22 +25,25 @@ class Agent:
 		if os.path.exists(r'D:\Sukuna AI\Model\target_nn_5m.pth'):
 			self.q_network = torch.load(r'D:\Sukuna AI\Model\q_nn_5m.pth')
 			self.target_net = torch.load(r'D:\Sukuna AI\Model\target_nn_5m.pth')
+			self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=rate)
+			self.optimizer.load_state_dict(torch.load(r'D:\Sukuna AI\Model\optimizer_5m.pth'))
 		else:
 			self.q_network=DQN(self.state_size).to(device)
 			self.target_net= DQN(self.state_size).to(device)
 			for param_p in self.q_network.parameters(): 
 				weight_init.normal_(param_p)
 			self.target_net.load_state_dict(self.q_network.state_dict())
-		self.hs = torch.zeros(1, 1, 256)
-		self.cs = torch.zeros(1, 1, 256)
-		self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=0.00025)
+			self.optimizer = torch.optim.Adam(self.q_network.parameters(), lr=rate)
+		self.hs = torch.zeros(1, 1, 50)
+		self.cs = torch.zeros(1, 1, 50)
 
 		#summary(self.q_network,input_size = (1, 96, 99))
 		#summary(self.q_network,input_size = (1, 96, 99))
 	def store(self, state, actions, new_states, rewards, action, step):
 		for n in range(len(actions)):
 			self.memory.push(state, actions[n]+1, new_states[n], rewards[n])
-
+	def reset (self):
+		self.memory = ReplayMemory(10000)
 	def make_action(self, state, step):
 		#if self.rand_act == True and np.random.rand() <= self.epsilon:
 		#	return random.randrange(self.action_size)
@@ -53,8 +56,13 @@ class Agent:
 	def optimize(self, step):
 		if self.memory.__len__() < 480:
 			return
+		if os.path.exists(r'D:\Sukuna AI\Model\target_nn_5m.pth'):
+			copyfile(r'D:\Sukuna AI\Model\q_nn_5m.pth', r'D:\Sukuna AI\Model\q_nn_5m_copy.pth')
+			copyfile(r'D:\Sukuna AI\Model\target_nn_5m.pth', r'D:\Sukuna AI\Model\target_nn_5m_copy.pth')
+			copyfile(r'D:\Sukuna AI\Model\optimizer_5m.pth', r'D:\Sukuna AI\Model\optimizer_5m_copy.pth')
 		torch.save(self.q_network, r'D:\Sukuna AI\Model\q_nn_5m.pth')
 		torch.save(self.target_net, r'D:\Sukuna AI\Model\target_nn_5m.pth')
+		torch.save(self.optimizer.state_dict(), r'D:\Sukuna AI\Model\optimizer_5m.pth')
 		if step % self.T == 0:
 			transitions = self.memory.sample(self.batch_size)
 			# Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
@@ -72,8 +80,8 @@ class Agent:
 			action_batch = torch.LongTensor(batch.action).to(device)
 			reward_batch = torch.FloatTensor(batch.reward).to(device)
 			action = []
-			hs = torch.zeros(1, 1, 256)
-			cs = torch.zeros(1, 1, 256)
+			hs = torch.zeros(1, 1, 50)
+			cs = torch.zeros(1, 1, 50)
 			for x in batch.next_state:
 				tensor = torch.FloatTensor(x).to(device)
 				tensor = tensor.unsqueeze(0)
@@ -82,8 +90,8 @@ class Agent:
 				cs = options[2]
 				action.append((np.argmax(options[0].detach().cpu().numpy())))
 			next_state_action = torch.LongTensor(action).to(device)
-			hs = torch.zeros(1, 96, 256)
-			cs = torch.zeros(1, 96, 256)
+			hs = torch.zeros(1, 96, 50)
+			cs = torch.zeros(1, 96, 50)
 			# Compute Q(s_t, a) - the model computes Q(s_t), then we select the
 			# columns of actions taken. These are the actions which would've been taken
 			# for each batch state according to q_network
@@ -109,8 +117,8 @@ class Agent:
 			self.optimizer.zero_grad()
 			loss.backward()
 			par = list(self.q_network.parameters())
-			for param in self.q_network.parameters():
-					param.grad.data.clamp_(-1, 1)
+			#for param in self.q_network.parameters():
+			#		param.grad.data.clamp_(-1, 1)
 		
 			self.optimizer.step()
 		

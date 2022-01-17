@@ -5,13 +5,13 @@ class DQN(nn.Module):
 	def __init__(self, state_size):
 		super(DQN, self).__init__()
 		self.first_two_layers = nn.Sequential(
-			nn.Linear(state_size, 256),
+			nn.Linear(state_size, 50),
 			nn.ELU(),
-			nn.Linear(256, 256),
+			nn.Linear(50, 50),
 			nn.ELU()
 		)
-		self.lstm = nn.LSTM(256, 256, 1, batch_first=True)
-		self.last_linear = nn.Linear(256, 3)
+		self.lstm = nn.LSTM(50, 50, 1, batch_first=True)
+		self.last_linear = nn.Linear(50, 3)
 		nn.init.constant_(self.first_two_layers[0].bias,0)
 		nn.init.constant_(self.first_two_layers[2].bias,0)
 		nn.init.constant_(self.last_linear.bias,0)

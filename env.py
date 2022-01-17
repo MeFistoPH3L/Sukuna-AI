@@ -81,13 +81,5 @@ class TradingEnv:
             self.actions.pop(0)
         self.actions.append(int(action))
         self.balance_history.append(float(v_new[action+1]))
-        while True:
-            try:
-                f = open("D:/Sukuna AI/Results/ethusdt_log_5m.csv", 'a')
-                f.write(f"{int(v_old)},{act},{open_}\n")
-                f.close()
-            except:
-                continue
-            break
         print(f"{step} {int(v_new[action+1])} {action}")
         return actions, rewards, new_states, new_states[action+1], True if v_new[action + 1] < 0 else False

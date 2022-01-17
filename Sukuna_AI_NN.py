@@ -22,76 +22,12 @@ from copy import deepcopy
 
 path = r"D:\Sukuna AI\Candles"
 binance_api_url = "https://fapi.binance.com/fapi/v1/"
-tickers = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'SUSHIUSDT', 'XRPUSDT', 'BNBUSDT', 'DOGEUSDT', 'IOTAUSDT', 'MATICUSDT', 'ATOMUSDT', 'LINKUSDT', 'NEARUSDT']
-current_price = 0.0000
-def current_price_func(msg):
-    global current_price
-    current_price=msg
-
-def read_history(tf, currency):
-    while True:
-        try:
-            os.chdir(path+"/"+currency+"/"+tf)
-            market_data = np.empty(shape = [0,12])
-            start_time = 0
-            for file in os.listdir():
-                market_data_tmp = np.empty(shape = [0,12])
-                file_path = f"{path}/{currency}/{tf}/{file}"
-                f = pd.read_csv(file_path, index_col=0, header = None)
-                with open(file_path, newline='') as f:
-                    reader = csv.reader(f)
-                    lst = list(reader)
-                    for line in lst:
-                        string_list = line[:-1]
-                        start_time=int(line[0])/1000
-                        tmp = np.array([[float(val) for val in line]])
-                        market_data_tmp = np.append(market_data_tmp,tmp, axis = 0)
-                market_data = np.append(market_data,market_data_tmp, axis = 0)
-            time_ = 0
-            if tf == "5m":
-                time_ = 5
-            if tf == "15m":
-                time_ = 15
-            if tf == "1h":
-                time_ = 60
-            if tf == "30m":
-                time_ = 30
-            if tf == "1d":
-                time_ = 24*60
-            start_time += time_*60
-            dt = datetime.datetime.now(timezone.utc)
-            utc_time = dt.replace(tzinfo=timezone.utc)
-            utc_timestamp = utc_time.timestamp()
-            # print(round(utc_timestamp))
-            set_count = int(math.ceil((round(utc_timestamp)-start_time)/(time_ * 60 * 1000)))
-            for i in range(set_count):
-                market_data_tmp = np.empty(shape = [0,12])
-                req = requests.get(url = binance_api_url+"klines", params = {'symbol':currency, 'interval' : tf, 'limit' : str(1000), 'startTime' : str(int(start_time) * 1000 + i * time_ * 60 * 1000 * 1000)})
-                
-                klines = json.loads(req.content)
-                for candle in klines:
-                    market_data_tmp = np.append(market_data_tmp,[np.array([float(val) for val in candle])], axis = 0)
-                market_data = np.append(market_data,market_data_tmp, axis = 0)
-        except:
-            time.sleep(1);
-            continue
-        break
-    return market_data[:-1]
-
 
 def save_data(data, name):
     json.dump(data.tolist(), codecs.open('D:/Sukuna AI/Data/' + name, 'a', encoding='utf-8'), sort_keys=True, indent=4)
 
 def load_data(name):
     return json.load(codecs.open('D:/Sukuna AI/Data/' + name, 'r', encoding='utf-8'))
-
-def z_trans(x):
-    temp_arr=np.append([val[4] for val in x],[val1[5] for val1 in x], axis = 0)
-    temp_arr = np.reshape(temp_arr,(2,-1))
-    temp_arr = stats.zscore(temp_arr, axis = 1)
-    #temp_arr = np.reshape(temp_arr,(-1,1))
-    temp_arr = np.append(temp_arr[0][-12:], temp_arr[1][-12:], axis = 0)
-    return temp_arr
 
 
 def hot_encoding(a):
@@ -147,23 +83,30 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
-for ep in range (1000000):
-    state = merge_state_action([states[0]],0)
-    environment = env.TradingEnv()
-    agent = Agent.Agent(True)
-    steps = len(states)-1
-    for i in np.arange(1, len(states)-1):
-        action = agent.make_action(state, i)
-        o = market_data[i-1]
-        c = market_data[i]
-        old_state = state
-        actions, rewards, new_states, state, done = environment.step([states[i]],o,c,i, action-1)
-        if done == True:
-            steps = i
-            break
-        agent.store(old_state, actions, new_states, rewards, action, i)
-        agent.optimize(i)
 
-    f = open ('D:/Sukuna AI/Results/log.txt', 'a')
-    f.write(str(steps) + '    ' + str(environment.balance_history[-1])+'\n')
-    f.close()
+t = [1, 0.1, 0.01, 0.001, 0.00025]
+cnt = [50, 50, 50, 50, 10000]
+for rate, count in zip(t,cnt):
+    for ep in range (count):
+        trades = 0
+        agent = Agent.Agent(rate)
+        new_rate = False
+        state = merge_state_action([states[0]],0)
+        environment = env.TradingEnv()
+        steps = len(states)-1
+        for i in np.arange(1, 8641):
+            action = agent.make_action(state, i)
+            trades += abs(action-1)
+            o = market_data[i-1]
+            c = market_data[i]
+            old_state = state
+            actions, rewards, new_states, state, done = environment.step([states[i]],o,c,i, action-1)
+            steps = i
+            if done == True:
+                break
+            agent.store(old_state, actions, new_states, rewards, action, i)
+            agent.optimize(i)
+
+        f = open ('D:/Sukuna AI/Results/log.txt', 'a')
+        f.write(str(steps) + '    ' + str(environment.balance_history[-1]) + '    ' + str(trades) + '\n')
+        f.close()
