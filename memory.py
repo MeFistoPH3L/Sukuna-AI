@@ -2,7 +2,7 @@ import random
 from collections import namedtuple
 
 Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+                        ('state', 'action', 'next_state', 'reward', 'old_hs', 'old_cs', 'new_hs', 'new_cs'))
 
 class ReplayMemory(object):
     def __init__(self, capacity):

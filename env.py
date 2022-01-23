@@ -7,9 +7,9 @@ class TradingEnv:
     def __init__(self):
         self.initial_value = 100000
         self.balance_history = [float(self.initial_value)]
-        self.spread = 0.01
+        self.spread = 0.02
         self.position = [0]*3
-        self.trade_size = 100000
+        self.trade_size = 500000
         self.balance = 100000
         self.actions = [0]*400
         self.last_action = 0

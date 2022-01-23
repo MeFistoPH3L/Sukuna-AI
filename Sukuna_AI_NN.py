@@ -53,7 +53,7 @@ def merge_state_action(state, a_variable):
     result = np.asarray(result)
     return result
 
-market_data = load_data('close_ethusdt_5m_8.txt')
+market_data = load_data('close_ethusdt_5m_8_wv.txt')
 """
 f = open ('D:/Sukuna AI/Data/' + 'ethusdt_states.txt', 'a')
 f.write('[')
@@ -77,36 +77,36 @@ f.write(']')
 f.close()
 """
 i = 0   
-states = load_data('z_score_log_ethusdt_5m_8.txt')
-SEED = 2037
+states = load_data('z_score_log_ethusdt_5m_8_wv.txt')
+SEED = 23
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 np.random.seed(SEED)
 random.seed(SEED)
 
-t = [1, 0.1, 0.01, 0.001, 0.00025]
-cnt = [50, 50, 50, 50, 10000]
-for rate, count in zip(t,cnt):
-    for ep in range (count):
-        trades = 0
-        agent = Agent.Agent(rate)
-        new_rate = False
-        state = merge_state_action([states[0]],0)
-        environment = env.TradingEnv()
-        steps = len(states)-1
-        for i in np.arange(1, 8641):
-            action = agent.make_action(state, i)
-            trades += abs(action-1)
-            o = market_data[i-1]
-            c = market_data[i]
-            old_state = state
-            actions, rewards, new_states, state, done = environment.step([states[i]],o,c,i, action-1)
-            steps = i
-            if done == True:
-                break
-            agent.store(old_state, actions, new_states, rewards, action, i)
-            agent.optimize(i)
-
-        f = open ('D:/Sukuna AI/Results/log.txt', 'a')
-        f.write(str(steps) + '    ' + str(environment.balance_history[-1]) + '    ' + str(trades) + '\n')
-        f.close()
+for ep in range (10000):
+    agent = Agent.Agent()
+    trades = 0
+    new_rate = False
+    state = merge_state_action([states[0]],0)
+    environment = env.TradingEnv()
+    steps = len(states)-1
+    for i in np.arange(1, len(market_data)):
+        old_hs = agent.hs
+        old_cs = agent.cs
+        action = agent.make_action(state, i)
+        new_hs = agent.hs
+        new_cs = agent.cs
+        trades += abs(action-1)
+        o = market_data[i-1]
+        c = market_data[i]
+        old_state = state
+        actions, rewards, new_states, state, done = environment.step([states[i]],o,c,i, action-1)
+        steps = i
+        if done == True:
+            break
+        agent.store(old_state, actions, new_states, rewards, action, i, old_hs, old_cs, new_hs, new_cs)
+        agent.optimize(i)
+    f = open ('D:/Sukuna AI/Results/log.txt', 'a')
+    f.write(str(steps) + '    ' + str(environment.balance_history[-1]) + '    ' + str(trades) + '\n')
+    f.close()
